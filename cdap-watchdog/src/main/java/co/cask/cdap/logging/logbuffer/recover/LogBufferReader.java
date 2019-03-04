@@ -14,9 +14,11 @@
  * the License.
  */
 
-package co.cask.cdap.logging.logbuffer;
+package co.cask.cdap.logging.logbuffer.recover;
 
 import co.cask.cdap.api.common.Bytes;
+import co.cask.cdap.logging.logbuffer.LogBufferEvent;
+import co.cask.cdap.logging.logbuffer.LogBufferFileOffset;
 import co.cask.cdap.logging.serialize.LoggingEventSerializer;
 import com.google.common.io.Closeables;
 

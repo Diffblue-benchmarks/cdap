@@ -1521,6 +1521,22 @@
   </property>
 
   <property>
+    <name>log.buffer.cleaner.delay.millis</name>
+    <value>600000</value>
+    <description>
+      Log buffer cleaner delay to periodically run cleaner after delay millis
+    </description>
+  </property>
+
+  <property>
+    <name>log.buffer.cleaner.batch.size</name>
+    <value>1000</value>
+    <description>
+      Log buffer cleaner batch size to clean up log buffer files in batches
+    </description>
+  </property>
+
+  <property>
     <name>log.kafka.topic</name>
     <value>logs.user-v2</value>
     <description>

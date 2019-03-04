@@ -14,12 +14,14 @@
  * the License.
  */
 
-package co.cask.cdap.logging.logbuffer;
+package co.cask.cdap.logging.logbuffer.recover;
 
 import co.cask.cdap.common.conf.CConfiguration;
 import co.cask.cdap.common.conf.Constants;
 import co.cask.cdap.common.logging.LogSamplers;
 import co.cask.cdap.common.logging.Loggers;
+import co.cask.cdap.logging.logbuffer.LogBufferEvent;
+import co.cask.cdap.logging.logbuffer.LogBufferFileOffset;
 import co.cask.cdap.logging.meta.CheckpointManager;
 import co.cask.cdap.logging.pipeline.logbuffer.LogBufferProcessorPipeline;
 import com.google.common.annotations.VisibleForTesting;
@@ -40,7 +42,7 @@ import java.util.concurrent.TimeUnit;
  * Log buffer recovery service which recovers logs upon log saver restart and sends them to log buffer pipeline for
  * further processing.
  */
-class LogBufferRecoveryService extends AbstractExecutionThreadService {
+public class LogBufferRecoveryService extends AbstractExecutionThreadService {
   private static final Logger LOG = LoggerFactory.getLogger(LogBufferRecoveryService.class);
   // For outage, only log once per 60 seconds per message.
   private static final Logger OUTAGE_LOG =
@@ -56,8 +58,8 @@ class LogBufferRecoveryService extends AbstractExecutionThreadService {
   private LogBufferReader reader;
   private volatile boolean stopped;
 
-  LogBufferRecoveryService(CConfiguration cConf, List<LogBufferProcessorPipeline> pipelines,
-                           List<CheckpointManager<LogBufferFileOffset>> checkpointManagers) {
+  public LogBufferRecoveryService(CConfiguration cConf, List<LogBufferProcessorPipeline> pipelines,
+                                  List<CheckpointManager<LogBufferFileOffset>> checkpointManagers) {
     this(pipelines, checkpointManagers, cConf.get(Constants.LogBuffer.LOG_BUFFER_BASE_DIR),
          cConf.getInt(Constants.LogBuffer.LOG_BUFFER_RECOVERY_BATCH_SIZE));
   }

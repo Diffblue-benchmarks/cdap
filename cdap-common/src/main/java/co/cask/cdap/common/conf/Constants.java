@@ -818,6 +818,9 @@ public final class Constants {
     // log buffer writer configs
     public static final String LOG_BUFFER_BASE_DIR = "log.buffer.base.dir";
     public static final String LOG_BUFFER_MAX_FILE_SIZE_BYTES = "log.buffer.max.file.size.bytes";
+    // log buffer cleaner configs
+    public static final String LOG_BUFFER_CLEANER_DELAY_MILLIS = "log.buffer.cleaner.delay.millis";
+    public static final String LOG_BUFFER_CLEANER_BATCH_SIZE = "log.buffer.cleaner.batch.size";
     // log buffer recovery configs
     public static final String LOG_BUFFER_RECOVERY_BATCH_SIZE = "log.buffer.recovery.batch.size";
     // number of events to be sent to time event queue processor from incoming queue

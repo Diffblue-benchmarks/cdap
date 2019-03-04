@@ -27,7 +27,9 @@ import co.cask.cdap.common.service.RetryStrategies;
 import co.cask.cdap.common.service.RetryStrategy;
 import co.cask.cdap.logging.framework.LogPipelineLoader;
 import co.cask.cdap.logging.framework.LogPipelineSpecification;
+import co.cask.cdap.logging.logbuffer.cleaner.LogBufferCleanerService;
 import co.cask.cdap.logging.logbuffer.handler.LogBufferHandler;
+import co.cask.cdap.logging.logbuffer.recover.LogBufferRecoveryService;
 import co.cask.cdap.logging.meta.CheckpointManager;
 import co.cask.cdap.logging.meta.CheckpointManagerFactory;
 import co.cask.cdap.logging.pipeline.LogProcessorPipelineContext;
@@ -70,6 +72,7 @@ public class LogBufferService extends AbstractIdleService {
   private Cancellable cancellable;
   private NettyHttpService httpService;
   private ConcurrentLogBufferWriter concurrentWriter;
+  private LogBufferCleanerService logCleanerService;
   private LogBufferRecoveryService recoveryService;
 
   @Inject
@@ -92,6 +95,10 @@ public class LogBufferService extends AbstractIdleService {
     // start log recovery service to recover all the pending logs
     recoveryService = new LogBufferRecoveryService(cConf, bufferPipelines, checkpointManagers);
     recoveryService.startAndWait();
+
+    // start log buffer cleaner service
+    logCleanerService = new LogBufferCleanerService(cConf, checkpointManagers);
+    logCleanerService.startAndWait();
 
     // create concurrent writer
     concurrentWriter = new ConcurrentLogBufferWriter(cConf, bufferPipelines);
@@ -198,6 +205,9 @@ public class LogBufferService extends AbstractIdleService {
   private void stopAllServices() throws Exception {
     if (httpService != null) {
       httpService.stop();
+    }
+    if (logCleanerService != null) {
+      logCleanerService.stopAndWait();
     }
     if (recoveryService != null) {
       recoveryService.stopAndWait();

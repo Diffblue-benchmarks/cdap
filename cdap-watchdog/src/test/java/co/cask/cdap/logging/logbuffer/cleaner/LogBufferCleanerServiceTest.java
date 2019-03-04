@@ -14,25 +14,19 @@
  * the License.
  */
 
-package co.cask.cdap.logging.logbuffer;
+package co.cask.cdap.logging.logbuffer.cleaner;
 
 import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.classic.spi.LoggingEvent;
-import co.cask.cdap.api.metrics.MetricsContext;
-import co.cask.cdap.api.metrics.NoopMetricsContext;
-import co.cask.cdap.common.conf.CConfiguration;
 import co.cask.cdap.common.logging.LoggingContext;
 import co.cask.cdap.common.utils.Tasks;
 import co.cask.cdap.logging.appender.LogMessage;
 import co.cask.cdap.logging.context.WorkerLoggingContext;
-import co.cask.cdap.logging.pipeline.LogPipelineTestUtil;
-import co.cask.cdap.logging.pipeline.LogProcessorPipelineContext;
-import co.cask.cdap.logging.pipeline.MockAppender;
-import co.cask.cdap.logging.pipeline.logbuffer.LogBufferPipelineConfig;
-import co.cask.cdap.logging.pipeline.logbuffer.LogBufferProcessorPipeline;
+import co.cask.cdap.logging.logbuffer.LogBufferFileOffset;
+import co.cask.cdap.logging.logbuffer.LogBufferWriter;
+import co.cask.cdap.logging.logbuffer.MockCheckpointManager;
+import co.cask.cdap.logging.meta.Checkpoint;
 import co.cask.cdap.logging.serialize.LoggingEventSerializer;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -40,56 +34,53 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
+import java.io.File;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Tests for {@link LogBufferRecoveryService}.
+ * Tests for {@link LogBufferCleanerService}.
  */
-public class LogBufferRecoveryServiceTest {
+public class LogBufferCleanerServiceTest {
   private static final LoggingEventSerializer serializer = new LoggingEventSerializer();
-  private static final MetricsContext NO_OP_METRICS_CONTEXT = new NoopMetricsContext();
 
   @ClassRule
   public static final TemporaryFolder TMP_FOLDER = new TemporaryFolder();
 
   @Test
-  public void testLogBufferRecoveryService() throws Exception {
+  public void testLogBufferCleanerService() throws Exception {
     String absolutePath = TMP_FOLDER.newFolder().getAbsolutePath();
 
-    // create and start pipeline
-    LoggerContext loggerContext = LogPipelineTestUtil.createLoggerContext("WARN",
-                                                                          ImmutableMap.of("test.logger", "INFO"),
-                                                                          MockAppender.class.getName());
-    final MockAppender appender = LogPipelineTestUtil.getAppender(loggerContext.getLogger(Logger.ROOT_LOGGER_NAME),
-                                                                  "Test", MockAppender.class);
     MockCheckpointManager checkpointManager = new MockCheckpointManager();
-    LogBufferPipelineConfig config = new LogBufferPipelineConfig(1024L, 300L, 500L, 4);
-    loggerContext.start();
-    LogBufferProcessorPipeline pipeline = new LogBufferProcessorPipeline(
-      new LogProcessorPipelineContext(CConfiguration.create(), "test", loggerContext, NO_OP_METRICS_CONTEXT, 0),
-      config, checkpointManager, 0);
+    // update checkpoints
+    checkpointManager.saveCheckpoints(ImmutableMap.of(0, new TestCheckpoint(3L, 0L, 1L)));
 
-    // start the pipeline
-    pipeline.startAndWait();
-
-    // write directly to log buffer
-    LogBufferWriter writer = new LogBufferWriter(absolutePath, 250);
+    // write directly to log buffer, keep file size 10 bytes so that more files are created
+    LogBufferWriter writer = new LogBufferWriter(absolutePath, 10);
     ImmutableList<byte[]> events = getLoggingEvents();
     writer.write(events.iterator()).iterator();
     writer.close();
 
-    // start log buffer reader to read log events from files. keep the batch size as 2 so that there are more than 1
-    // iterations
-    LogBufferRecoveryService service = new LogBufferRecoveryService(ImmutableList.of(pipeline),
-                                                                    ImmutableList.of(checkpointManager),
-                                                                    absolutePath, 2);
+    // start cleaner service
+    LogBufferCleanerService service = new LogBufferCleanerService(ImmutableList.of(checkpointManager),
+                                                                  absolutePath, 10000, 2);
     service.startAndWait();
 
-    Tasks.waitFor(5, () -> appender.getEvents().size(), 120, TimeUnit.SECONDS, 100, TimeUnit.MILLISECONDS);
+    // should delete file 0 an1
+    File file0 = new File(absolutePath, "0.buff");
+    File file1 = new File(absolutePath, "1.buff");
+    Tasks.waitFor(true, () -> !file0.exists() && !file1.exists(), 120, TimeUnit.SECONDS, 100, TimeUnit.MILLISECONDS);
+
+    // update checkpoints
+    checkpointManager.saveCheckpoints(ImmutableMap.of(0, new TestCheckpoint(5L, 0L, 1L)));
+
+    // should delete file 2, 3 and 4
+    File file2 = new File(absolutePath, "2.buff");
+    File file3 = new File(absolutePath, "3.buff");
+    File file4 = new File(absolutePath, "4.buff");
+    Tasks.waitFor(true, () -> !file2.exists() && !file3.exists() && !file4.exists(), 120, TimeUnit.SECONDS,
+                  100, TimeUnit.MILLISECONDS);
 
     service.stopAndWait();
-    pipeline.stopAndWait();
-    loggerContext.stop();
   }
 
   private ImmutableList<byte[]> getLoggingEvents() {
@@ -113,5 +104,12 @@ public class LogBufferRecoveryServiceTest {
     event.setMessage(message);
     event.setTimeStamp(timestamp);
     return new LogMessage(event, loggingContext);
+  }
+
+  private static final class TestCheckpoint extends Checkpoint<LogBufferFileOffset> {
+
+    TestCheckpoint(long fileId, long fileOffset, long maxEventTime) {
+      super(new LogBufferFileOffset(fileId, fileOffset), maxEventTime);
+    }
   }
 }
