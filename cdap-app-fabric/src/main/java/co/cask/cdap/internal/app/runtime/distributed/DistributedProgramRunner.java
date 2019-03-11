@@ -75,6 +75,7 @@ import org.apache.twill.api.logging.LogHandler;
 import org.apache.twill.common.Cancellable;
 import org.apache.twill.common.Threads;
 import org.apache.twill.filesystem.Location;
+import org.elasticsearch.common.Strings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -198,6 +199,7 @@ public abstract class DistributedProgramRunner implements ProgramRunner, Program
       final Map<String, LocalizeResource> localizeResources = new HashMap<>(launchConfig.getExtraResources());
       final List<String> additionalClassPaths = new ArrayList<>();
       addContainerJars(cConf, localizeResources, additionalClassPaths);
+      addAdditionalLogAppenderJars(cConf, tempDir, localizeResources);
 
       prepareHBaseDDLExecutorResources(tempDir, cConf, localizeResources);
 
@@ -363,6 +365,20 @@ public abstract class DistributedProgramRunner implements ProgramRunner, Program
     } catch (Exception e) {
       deleteDirectory(tempDir);
       throw Throwables.propagate(e);
+    }
+  }
+
+  private void addAdditionalLogAppenderJars(CConfiguration cConf, File tempDir,
+                                            Map<String, LocalizeResource> localizeResources) throws IOException {
+    if (!Strings.isNullOrEmpty(cConf.get(Constants.Logging.LOG_APPENDER_PROVIDER))) {
+      String provider = cConf.get(Constants.Logging.LOG_APPENDER_PROVIDER);
+      String jarDir = cConf.get(Constants.Logging.LOG_APPENDER_EXT_DIR);
+      File bundleJarFile = new File(tempDir, "log-appender.jar");
+      BundleJarUtil.createJar(new File(jarDir + "/" + provider), bundleJarFile);
+      String localizedDir = "log-appender";
+      // set extensions dir to point to localized appender directory - appender/<log-appender-provider>
+      localizeResources.put(localizedDir + "/" + provider, new LocalizeResource(bundleJarFile, true));
+      cConf.set(Constants.Logging.LOG_APPENDER_EXT_DIR, localizedDir);
     }
   }
 
