@@ -2,6 +2,7 @@
 cbmcArguments:
   java-generate-no-comments: true
   no-trivial-tests: true
+  do-not-test-methods-with-access: private
 phases:
   -
     #0
